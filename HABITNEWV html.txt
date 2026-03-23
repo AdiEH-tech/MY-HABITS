@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>My Habits 🌸</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{background:linear-gradient(135deg,#fdf6ff 0%,#f0f9ff 100%);font-family:'Segoe UI',Arial,sans-serif;min-height:100vh;}input,textarea,button,select{font-family:inherit;}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const{useState,useEffect}=React;
+const PASTEL={pink:"#FFD6E0",pinkD:"#c9607a",purple:"#E8D5F5",purpleD:"#8b5cf6",blue:"#D6EAFF",blueD:"#3b82f6",mint:"#D4F5E9",mintD:"#10b981",peach:"#FFE8D6",peachD:"#f97316",yellow:"#FFF3C4",yellowD:"#d97706",lavender:"#EDE9FE",lavenderD:"#7c3aed",rose:"#FCE7F3",roseD:"#db2777"};
+const COLORS=Object.keys(PASTEL);
+const ICONS=["🌸","✨","💪","📚","🧘","🏃","💧","🥗","🎯","🌙","☀️","🎨","🎵","🌿","❤️","⭐","🔥","🧠","😴","👟"];
+const DAYS_HE=["א","ב","ג","ד","ה","ו","ש"];
+const MONTHS_HE=["ינו","פבר","מרץ","אפר","מאי","יוני","יולי","אוג","ספט","אוק","נוב","דצמ"];
+const MONTHS_FULL=["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
+
+function getTodayStr(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function dateStr(y,m,d){return`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+function getDaysInMonth(y,m){return new Date(y,m+1,0).getDate();}
+function getFirstDayOfMonth(y,m){return new Date(y,m,1).getDay();}
+function getWeekDates(offset=0){const d=new Date();d.setDate(d.getDate()-offset*7);const sun=new Date(d);sun.setDate(d.getDate()-d.getDay());return Array.from({length:7},(_,i)=>{const dd=new Date(sun);dd.setDate(sun.getDate()+i);return`${dd.getFullYear()}-${String(dd.getMonth()+1).padStart(2,'0')}-${String(dd.getDate()).padStart(2,'0')}`;});}
+function freqLabel(f){if(!f)return"כל יום";const u=f.unit==="day"?"יום":f.unit==="week"?"שבוע":"חודש";return`${f.count}× ב${u}`;}
+function getExpected(freq,dates){if(!freq)return dates.length;const{count,unit}=freq;if(unit==="day")return Math.round(dates.length*count);if(unit==="week")return Math.round((dates.length/7)*count);if(unit==="month")return Math.round((dates.length/30)*count);return dates.length;}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+function load(k,fb){try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch(e){return fb;}}
+
+const DEFAULT_HABITS=[
+  {id:1,name:"שתיית מים",icon:"💧",color:"blue",freq:{count:8,unit:"day"},stepsGoal:null,goals:[],notes:"",reminder:""},
+  {id:2,name:"ספורט",icon:"🏃",color:"mint",freq:{count:3,unit:"week"},stepsGoal:null,goals:[],notes:"",reminder:""},
+  {id:3,name:"צעדים יומיים",icon:"👟",color:"peach",freq:{count:5,unit:"week"},stepsGoal:8000,goals:[],notes:"",reminder:""},
+];
+
+function ScoreCircle({pct,color,size=52}){
+  const r=(size-6)/2,circ=2*Math.PI*r,dash=(Math.min(pct,100)/100)*circ;
+  const grade=pct>=100?"🏆":pct>=85?"A":pct>=70?"B":pct>=50?"C":"D";
+  const gc=pct>=100?"#10b981":pct>=85?"#10b981":pct>=70?"#3b82f6":pct>=50?"#f97316":"#ef4444";
+  return(
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#f3f4f6" strokeWidth={5}/>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={5} strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+        <span style={{fontSize:pct>=100?9:10,fontWeight:700,color:gc,lineHeight:1}}>{grade}</span>
+        <span style={{fontSize:8.5,color:"#9ca3af",lineHeight:1}}>{Math.round(pct)}%</span>
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  const [tab,setTab]=useState("today");
+  const [habits,setHabits]=useState(()=>load("hb3",DEFAULT_HABITS));
+  const [logs,setLogs]=useState(()=>load("lg3",{}));
+  const [stepsLog,setStepsLog]=useState(()=>load("sl3",{}));
+  const [showAdd,setShowAdd]=useState(false);
+  const [editHabit,setEditHabit]=useState(null);
+  const [archived,setArchived]=useState(()=>load("ar3",[]));
+  const [showArchive,setShowArchive]=useState(false);
+  const [viewMode,setViewMode]=useState("week");
+  const [calMonth,setCalMonth]=useState(new Date().getMonth());
+  const [calYear,setCalYear]=useState(new Date().getFullYear());
+  const [selectedHabit,setSelectedHabit]=useState(null);
+  const [stepsInputHabit,setStepsInputHabit]=useState(null);
+  const today=getTodayStr();
+  const weekDates=getWeekDates(0);
+
+  useEffect(()=>save("hb3",habits),[habits]);
+  useEffect(()=>save("lg3",logs),[logs]);
+  useEffect(()=>save("sl3",stepsLog),[stepsLog]);
+  useEffect(()=>save("ar3",archived),[archived]);
+
+  const toggleLog=(hId,ds)=>setLogs(p=>{const k=`${hId}_${ds}`;return{...p,[k]:!p[k]};});
+  const isDone=(hId,ds)=>!!logs[`${hId}_${ds}`];
+  const getSteps=(hId,ds)=>stepsLog[`${hId}_${ds}`]||0;
+  const setSteps=(hId,ds,v)=>{
+    setStepsLog(p=>({...p,[`${hId}_${ds}`]:v}));
+    const h=habits.find(x=>x.id===hId);
+    if(h?.stepsGoal) setLogs(p=>({...p,[`${hId}_${ds}`]:v>=h.stepsGoal}));
+  };
+  const countDone=(hId,dates)=>dates.filter(ds=>isDone(hId,ds)).length;
+  const getMonthDates=(y,m)=>Array.from({length:getDaysInMonth(y,m)},(_,i)=>dateStr(y,m,i+1)).filter(ds=>ds<=today);
+  const getStreak=(hId)=>{let s=0,d=new Date();while(true){const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;if(!logs[`${hId}_${ds}`])break;s++;d.setDate(d.getDate()-1);}return s;};
+  const getScore=(habit,dates)=>{const done=countDone(habit.id,dates),target=getExpected(habit.freq,dates);return{done,target,pct:Math.min(target>0?Math.round((done/target)*100):0,100),label:freqLabel(habit.freq)};};
+
+  const getInsights=(habit)=>{
+    const thisW=getWeekDates(0).filter(ds=>ds<=today);
+    const lastW=getWeekDates(1);
+    const tw=getScore(habit,thisW),lw=getScore(habit,lastW);
+    const diff=tw.done-lw.done;
+    const remaining=Math.max(0,tw.target-tw.done);
+    const daysLeft=7-new Date().getDay();
+
+    // longest streak
+    let maxStreak=0,cur=0;
+    const allDates=Object.keys(logs).filter(k=>k.startsWith(`${habit.id}_`)&&logs[k]).map(k=>k.replace(`${habit.id}_`,'')).sort();
+    allDates.forEach((ds,i)=>{if(i===0){cur=1;}else{const prev=new Date(allDates[i-1]),curr=new Date(ds);cur=(curr-prev)/(864e5)===1?cur+1:1;}maxStreak=Math.max(maxStreak,cur);});
+
+    // week trend (last 4 weeks)
+    const weekScores=[0,1,2,3].map(o=>getScore(habit,getWeekDates(o)).done);
+    const rising=weekScores[0]>weekScores[1]&&weekScores[1]>weekScores[2];
+    const falling=weekScores[0]<weekScores[1]&&weekScores[1]<weekScores[2];
+
+    const ins=[];
+    if(tw.pct>=100)ins.push({icon:"⭐",text:"השגת את היעד השבועי! כל הכבוד!",bg:"#f0fdf4",color:"#10b981"});
+    else if(remaining>0&&daysLeft>0)ins.push({icon:"🎯",text:`נשאר לך ${remaining} פעמים להשלים את היעד השבוע`,bg:"#eff6ff",color:"#3b82f6"});
+    if(diff>0)ins.push({icon:"📈",text:`${diff} פעמים יותר מהשבוע שעבר – ממשיכה לעלות!`,bg:"#f0fdf4",color:"#10b981"});
+    else if(diff<0)ins.push({icon:"📉",text:`${Math.abs(diff)} פעמים פחות מהשבוע שעבר`,bg:"#fff7ed",color:"#f97316"});
+    if(rising)ins.push({icon:"🚀",text:"מגמה עולה – 3 שבועות ברצף!",bg:"#fdf4ff",color:"#9333ea"});
+    if(falling)ins.push({icon:"⚠️",text:"מגמה יורדת – שווה לשים לב",bg:"#fff7ed",color:"#f97316"});
+    const streak=getStreak(habit.id);
+    if(streak>=7)ins.push({icon:"🔥",text:`${streak} ימים ברצף – מדהים!`,bg:"#fff7ed",color:"#ec4899"});
+    if(maxStreak>streak&&maxStreak>2)ins.push({icon:"🏆",text:`השיא שלך: ${maxStreak} ימים ברצף`,bg:"#fefce8",color:"#d97706"});
+    const bestDay=(()=>{const c=[0,0,0,0,0,0,0];Object.keys(logs).forEach(k=>{if(!k.startsWith(`${habit.id}_`)||!logs[k])return;try{c[new Date(k.replace(`${habit.id}_`,'')).getDay()]++;}catch(e){}});const mx=Math.max(...c);return mx>0?{day:DAYS_HE[c.indexOf(mx)],count:mx}:null;})();
+    if(bestDay)ins.push({icon:"💪",text:`יום ${bestDay.day} הכי חזק שלך (${bestDay.count} פעמים)`,bg:"#f5f3ff",color:"#7c3aed"});
+    return ins;
+  };
+
+  const pb=c=>PASTEL[c]||PASTEL.pink;
+  const pd=c=>PASTEL[c+"D"]||PASTEL.pinkD;
+
+  return(
+    <div dir="rtl" style={{minHeight:"100vh",background:"linear-gradient(135deg,#fdf6ff 0%,#f0f9ff 100%)",paddingBottom:80}}>
+      <div style={{background:"white",borderBottom:"1px solid #f0e6ff",padding:"16px 20px 0",position:"sticky",top:0,zIndex:10,boxShadow:"0 2px 12px #e8d5f520"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div>
+            <div style={{fontSize:22,fontWeight:700,color:"#7c3aed"}}>✨ My Habits</div>
+            <div style={{fontSize:12,color:"#a78bfa"}}>{new Date().toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'})}</div>
+          </div>
+          {tab==="today"&&(<div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setShowArchive(true)} style={{background:"white",color:"#9ca3af",border:"1px solid #e5e7eb",borderRadius:20,padding:"8px 12px",fontSize:13,cursor:"pointer"}}>🗄️</button>
+            <button onClick={()=>setShowAdd(true)} style={{background:"linear-gradient(135deg,#a78bfa,#ec4899)",color:"white",border:"none",borderRadius:20,padding:"8px 16px",fontSize:13,fontWeight:600,cursor:"pointer"}}>+ הרגל חדש</button>
+          </div>)}
+        </div>
+        <div style={{display:"flex",gap:4}}>
+          {[["today","היום 🌸"],["review","התקדמות 📊"]].map(([t,l])=>(
+            <button key={t} onClick={()=>setTab(t)} style={{padding:"8px 16px",border:"none",background:"transparent",fontSize:14,fontWeight:tab===t?700:400,color:tab===t?"#7c3aed":"#9ca3af",borderBottom:tab===t?"3px solid #7c3aed":"3px solid transparent",cursor:"pointer"}}>{l}</button>
+          ))}
+        </div>
+      </div>
+
+      {tab==="today"&&(
+        <div style={{padding:"16px 16px 0"}}>
+          {habits.length===0&&<div style={{textAlign:"center",padding:"60px 20px",color:"#c4b5fd"}}><div style={{fontSize:48}}>🌸</div><div style={{fontSize:16,marginTop:8}}>הוסיפי את ההרגל הראשון שלך!</div></div>}
+          {habits.map(h=>{
+            const bg=pb(h.color),dc=pd(h.color),done=isDone(h.id,today),streak=getStreak(h.id);
+            const thisWeekDates=weekDates.filter(ds=>ds<=today),weekDone=countDone(h.id,thisWeekDates),weekTarget=getExpected(h.freq,thisWeekDates);
+            const todaySteps=getSteps(h.id,today),stepsPct=h.stepsGoal?Math.min(Math.round((todaySteps/h.stepsGoal)*100),100):0;
+            return(
+              <div key={h.id} style={{background:"white",borderRadius:20,padding:16,marginBottom:12,border:`1.5px solid ${bg}`,boxShadow:`0 4px 16px ${bg}80`}}>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  <div style={{width:48,height:48,borderRadius:14,background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{h.icon}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:700,fontSize:15,color:"#1f2937"}}>{h.name}</div>
+                    <div style={{fontSize:12,color:dc,marginTop:2}}>{weekDone}/{weekTarget} {freqLabel(h.freq)}</div>
+                    {h.stepsGoal&&<div style={{fontSize:12,color:"#9ca3af",marginTop:1}}>👟 {todaySteps.toLocaleString()} / {h.stepsGoal.toLocaleString()} צעדים</div>}
+                    {streak>0&&<div style={{fontSize:11,color:"#f97316",marginTop:2}}>🔥 {streak} ימים רצוף</div>}
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+                    <button onClick={()=>toggleLog(h.id,today)} style={{width:36,height:36,borderRadius:"50%",border:`2px solid ${done?dc:bg}`,background:done?bg:"white",cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s",transform:done?"scale(1.1)":"scale(1)"}}>{done?"✓":"○"}</button>
+                    <button onClick={()=>setEditHabit(h)} style={{fontSize:11,color:"#9ca3af",background:"none",border:"none",cursor:"pointer"}}>עריכה</button>
+                  </div>
+                </div>
+                {h.stepsGoal&&(
+                  <div style={{marginTop:10,background:bg+"55",borderRadius:12,padding:"8px 12px"}}>
+                    <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+                      <span style={{fontSize:12,color:dc,fontWeight:600}}>👟 צעדים היום</span>
+                      <input type="number" value={todaySteps||""} onChange={e=>setSteps(h.id,today,parseInt(e.target.value)||0)} placeholder="0" style={{width:90,padding:"5px 8px",borderRadius:8,border:`1.5px solid ${dc}55`,fontSize:13,textAlign:"center",background:"white",outline:"none",color:dc,fontWeight:600}}/>
+                      <span style={{fontSize:11,color:"#9ca3af"}}>/ {h.stepsGoal.toLocaleString()}</span>
+                      <button onClick={()=>setStepsInputHabit(h)} style={{marginRight:"auto",fontSize:11,color:"#a78bfa",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>בדיעבד</button>
+                    </div>
+                    <div style={{height:6,borderRadius:3,background:"white",overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${stepsPct}%`,background:`linear-gradient(90deg,${bg},${dc})`,borderRadius:3,transition:"width .4s"}}/>
+                    </div>
+                  </div>
+                )}
+                <div style={{display:"flex",gap:4,marginTop:10,justifyContent:"space-between"}}>
+                  {weekDates.map((ds,i)=>{
+                    const d=isDone(h.id,ds),isT=ds===today,sp=h.stepsGoal?Math.min(Math.round((getSteps(h.id,ds)/h.stepsGoal)*100),100):0;
+                    return(<div key={i} style={{flex:1,textAlign:"center"}}>
+                      <div style={{fontSize:10,color:isT?"#7c3aed":"#9ca3af",marginBottom:3,fontWeight:isT?700:400}}>{DAYS_HE[new Date(ds).getDay()]}</div>
+                      <div onClick={()=>toggleLog(h.id,ds)} style={{height:24,borderRadius:6,background:d?bg:"#f9fafb",border:`1px solid ${d?dc:isT?"#c4b5fd":"#f3f4f6"}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:d?dc:"#d1d5db"}}>
+                        {d?(h.stepsGoal&&sp<100?`${sp}%`:"✓"):isT?"◉":""}
+                      </div>
+                    </div>);
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tab==="review"&&(
+        <div style={{padding:"16px 16px 0"}}>
+          <div style={{display:"flex",gap:8,marginBottom:16}}>
+            {["week","month","year"].map(v=>(<button key={v} onClick={()=>setViewMode(v)} style={{flex:1,padding:"8px 0",borderRadius:12,border:"none",background:viewMode===v?"linear-gradient(135deg,#a78bfa,#ec4899)":"white",color:viewMode===v?"white":"#6b7280",fontWeight:viewMode===v?700:400,fontSize:13,cursor:"pointer"}}>{v==="week"?"שבוע":v==="month"?"חודש":"שנה"}</button>))}
+          </div>
+          {(viewMode==="month"||viewMode==="year")&&(
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"white",borderRadius:16,padding:"10px 16px",marginBottom:12}}>
+              <button onClick={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1)}} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#7c3aed"}}>‹</button>
+              <span style={{fontWeight:700,color:"#1f2937"}}>{MONTHS_FULL[calMonth]} {calYear}</span>
+              <button onClick={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1)}} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#7c3aed"}}>›</button>
+            </div>
+          )}
+          <div style={{display:"flex",gap:8,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
+            <button onClick={()=>setSelectedHabit(null)} style={{whiteSpace:"nowrap",padding:"6px 14px",borderRadius:20,border:"none",background:!selectedHabit?"linear-gradient(135deg,#a78bfa,#ec4899)":"white",color:!selectedHabit?"white":"#6b7280",fontSize:12,cursor:"pointer",flexShrink:0}}>הכל</button>
+            {habits.map(h=>(<button key={h.id} onClick={()=>setSelectedHabit(h.id)} style={{whiteSpace:"nowrap",padding:"6px 14px",borderRadius:20,border:"none",background:selectedHabit===h.id?pb(h.color):"white",color:selectedHabit===h.id?pd(h.color):"#6b7280",fontSize:12,cursor:"pointer",flexShrink:0}}>{h.icon} {h.name}</button>))}
+          </div>
+
+          {habits.filter(h=>!selectedHabit||h.id===selectedHabit).map(h=>{
+            const bg=pb(h.color),dc=pd(h.color);
+            let dates=viewMode==="week"?getWeekDates(0).filter(ds=>ds<=today):viewMode==="month"?getMonthDates(calYear,calMonth):Array.from({length:12},(_,mi)=>getMonthDates(calYear,mi)).flat();
+            const score=getScore(h,dates);
+            const barColor=score.pct>=85?"#10b981":score.pct>=60?"#3b82f6":score.pct>=40?"#f97316":"#ef4444";
+            const insights=getInsights(h);
+
+            if(viewMode==="week"){
+              const thisW=getWeekDates(0);
+              return(
+                <div key={h.id} style={{background:"white",borderRadius:20,padding:16,marginBottom:12,border:`1.5px solid ${bg}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                    <span style={{fontSize:22}}>{h.icon}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:700,color:"#1f2937",fontSize:15}}>{h.name}</div>
+                      <div style={{fontSize:11,color:"#9ca3af"}}>{score.label} · {score.done}/{score.target} ✓</div>
+                    </div>
+                    <ScoreCircle pct={score.pct} color={barColor} size={54}/>
+                  </div>
+
+                  {/* Week grid */}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:10}}>
+                    {thisW.map((ds,i)=>{
+                      const done=isDone(h.id,ds),isT=ds===today,dObj=new Date(ds);
+                      const sp=h.stepsGoal?Math.min(Math.round((getSteps(h.id,ds)/h.stepsGoal)*100),100):null;
+                      return(<div key={i} style={{textAlign:"center"}}>
+                        <div style={{fontSize:10,color:isT?"#7c3aed":"#9ca3af",fontWeight:isT?700:400}}>{DAYS_HE[dObj.getDay()]}</div>
+                        <div style={{fontSize:10,color:"#9ca3af",marginBottom:3}}>{dObj.getDate()}</div>
+                        <div onClick={()=>toggleLog(h.id,ds)} style={{height:30,borderRadius:7,background:done?bg:"#f9fafb",border:`1.5px solid ${done?dc:isT?"#c4b5fd":"#f3f4f6"}`,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:done?dc:"#d1d5db"}}>
+                          {done?(sp!==null&&sp<100?`${sp}%`:"✓"):"·"}
+                        </div>
+                        {h.stepsGoal&&<div style={{fontSize:8,color:"#9ca3af",marginTop:1}}>{getSteps(h.id,ds)>0?(getSteps(h.id,ds)/1000).toFixed(1)+"k":""}</div>}
+                      </div>);
+                    })}
+                  </div>
+
+                  {/* Steps weekly summary */}
+                  {h.stepsGoal&&(
+                    <div style={{background:bg+"33",borderRadius:10,padding:"8px 12px",marginBottom:10,display:"flex",justifyContent:"space-between"}}>
+                      <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#9ca3af"}}>סה״כ</div><div style={{fontSize:13,fontWeight:700,color:dc}}>{thisW.reduce((s,ds)=>s+getSteps(h.id,ds),0).toLocaleString()}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#9ca3af"}}>ממוצע יומי</div><div style={{fontSize:13,fontWeight:700,color:dc}}>{Math.round(thisW.reduce((s,ds)=>s+getSteps(h.id,ds),0)/7).toLocaleString()}</div></div>
+                      <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#9ca3af"}}>יעד יומי</div><div style={{fontSize:13,fontWeight:700,color:dc}}>{h.stepsGoal.toLocaleString()}</div></div>
+                    </div>
+                  )}
+
+                  {/* Progress bar */}
+                  <div style={{marginBottom:insights.length>0?12:0}}>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#9ca3af",marginBottom:4}}>
+                      <span>התקדמות ליעד</span>
+                      <span style={{color:barColor,fontWeight:700}}>{score.pct}%</span>
+                    </div>
+                    <div style={{height:8,borderRadius:4,background:"#f3f4f6",overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${score.pct}%`,background:`linear-gradient(90deg,${bg},${barColor})`,borderRadius:4,transition:"width .6s"}}/>
+                    </div>
+                  </div>
+
+                  {/* Insights as bubbles */}
+                  {insights.length>0&&(
+                    <div>
+                      <div style={{fontSize:11,color:"#9ca3af",marginBottom:6}}>תובנות</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {insights.map((ins,i)=>(
+                          <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 12px",borderRadius:12,background:ins.bg}}>
+                            <span style={{fontSize:14}}>{ins.icon}</span>
+                            <span style={{fontSize:12,color:ins.color,fontWeight:500}}>{ins.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if(viewMode==="month"){
+              const mDates=getMonthDates(calYear,calMonth),ms=getScore(h,mDates);
+              const mBar=ms.pct>=85?"#10b981":ms.pct>=60?"#3b82f6":ms.pct>=40?"#f97316":"#ef4444";
+              const days=getDaysInMonth(calYear,calMonth),first=getFirstDayOfMonth(calYear,calMonth);
+              return(
+                <div key={h.id} style={{background:"white",borderRadius:20,padding:16,marginBottom:12,border:`1.5px solid ${bg}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                    <span style={{fontSize:22}}>{h.icon}</span>
+                    <div style={{flex:1}}><div style={{fontWeight:700,color:"#1f2937",fontSize:15}}>{h.name}</div><div style={{fontSize:11,color:"#9ca3af"}}>{ms.label} · {ms.done}/{ms.target} ✓</div></div>
+                    <ScoreCircle pct={ms.pct} color={mBar} size={54}/>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:10}}>
+                    {DAYS_HE.map(d=><div key={d} style={{textAlign:"center",fontSize:10,color:"#9ca3af",padding:"2px 0"}}>{d}</div>)}
+                    {Array.from({length:first}).map((_,i)=><div key={`e${i}`}/>)}
+                    {Array.from({length:days},(_,i)=>{
+                      const day=i+1,ds=dateStr(calYear,calMonth,day),future=ds>today,isT=ds===today,done=isDone(h.id,ds);
+                      const sp=h.stepsGoal&&!future?Math.min(Math.round((getSteps(h.id,ds)/h.stepsGoal)*100),100):null;
+                      return(<div key={day} onClick={()=>!future&&toggleLog(h.id,ds)} style={{cursor:future?"default":"pointer",textAlign:"center"}}>
+                        <div style={{height:26,borderRadius:6,background:done?bg:future?"transparent":"#f9fafb",border:`1px solid ${done?dc:isT?"#c4b5fd":future?"transparent":"#f3f4f6"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:done?dc:future?"#d1d5db":"#9ca3af",fontWeight:isT?700:400}}>
+                          {done?(sp!==null&&sp<100?`${sp}%`:"✓"):future?"":day}
+                        </div>
+                      </div>);})}
+                  </div>
+                  <div style={{marginBottom:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#9ca3af",marginBottom:4}}><span>התקדמות</span><span style={{color:mBar,fontWeight:700}}>{ms.pct}%</span></div>
+                    <div style={{height:8,borderRadius:4,background:"#f3f4f6",overflow:"hidden"}}><div style={{height:"100%",width:`${ms.pct}%`,background:`linear-gradient(90deg,${bg},${mBar})`,borderRadius:4}}/></div>
+                  </div>
+                  {insights.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>{insights.map((ins,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 12px",borderRadius:12,background:ins.bg}}><span style={{fontSize:14}}>{ins.icon}</span><span style={{fontSize:12,color:ins.color,fontWeight:500}}>{ins.text}</span></div>))}</div>}
+                </div>
+              );
+            }
+
+            return(
+              <div key={h.id} style={{background:"white",borderRadius:20,padding:16,marginBottom:12,border:`1.5px solid ${bg}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                  <span style={{fontSize:22}}>{h.icon}</span>
+                  <div style={{flex:1}}><div style={{fontWeight:700,color:"#1f2937",fontSize:15}}>{h.name}</div><div style={{fontSize:11,color:"#9ca3af"}}>{score.label}</div></div>
+                  <ScoreCircle pct={score.pct} color={barColor} size={54}/>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+                  {Array.from({length:12},(_,mi)=>{const mD=getMonthDates(calYear,mi),ms=getScore(h,mD),mc=ms.pct>=85?"#10b981":ms.pct>=60?"#3b82f6":ms.pct>=40?"#f97316":"#ef4444";return(
+                    <div key={mi} style={{borderRadius:10,padding:"8px 6px",background:bg,textAlign:"center"}}>
+                      <div style={{fontSize:11,fontWeight:600,color:dc,marginBottom:4}}>{MONTHS_HE[mi]}</div>
+                      <div style={{height:4,borderRadius:2,background:"#fff8",overflow:"hidden"}}><div style={{height:"100%",width:`${ms.pct}%`,background:mc,borderRadius:2}}/></div>
+                      <div style={{fontSize:10,color:mc,marginTop:3,fontWeight:700}}>{ms.pct}%</div>
+                    </div>);})}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Steps backdating */}
+      {stepsInputHabit&&(()=>{
+        const h=stepsInputHabit,bg=pb(h.color),dc=pd(h.color);
+        return(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&setStepsInputHabit(null)}>
+            <div dir="rtl" style={{background:"white",borderRadius:"24px 24px 0 0",padding:24,width:"100%",maxWidth:480,boxShadow:"0 -8px 32px #0002"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                <span style={{fontWeight:700,fontSize:16,color:"#1f2937"}}>👟 הכנסת צעדים בדיעבד</span>
+                <button onClick={()=>setStepsInputHabit(null)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9ca3af"}}>✕</button>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:320,overflowY:"auto"}}>
+                {Array.from({length:14},(_,i)=>{
+                  const d=new Date();d.setDate(d.getDate()-i);
+                  const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                  const val=getSteps(h.id,ds),pct=h.stepsGoal?Math.min(Math.round((val/h.stepsGoal)*100),100):0;
+                  return(<div key={ds} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:12,background:val>0?bg+"33":"#f9fafb",border:`1px solid ${val>0?bg:"#f3f4f6"}`}}>
+                    <div style={{fontSize:12,color:"#6b7280",minWidth:80}}>{d.toLocaleDateString('he-IL',{weekday:'short',day:'numeric',month:'short'})}</div>
+                    <input type="number" value={val||""} onChange={e=>setSteps(h.id,ds,parseInt(e.target.value)||0)} placeholder="0 צעדים" style={{flex:1,padding:"5px 8px",borderRadius:8,border:`1.5px solid ${dc}44`,fontSize:13,textAlign:"center",background:"white",outline:"none"}}/>
+                    {val>0&&<span style={{fontSize:11,color:dc,fontWeight:700,minWidth:30}}>{pct}%</span>}
+                  </div>);
+                })}
+              </div>
+              <button onClick={()=>setStepsInputHabit(null)} style={{width:"100%",marginTop:16,padding:12,background:"linear-gradient(135deg,#a78bfa,#ec4899)",color:"white",border:"none",borderRadius:14,fontSize:14,fontWeight:700,cursor:"pointer"}}>שמירה ✓</button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {(showAdd||editHabit)&&<HabitModal habit={editHabit}
+        onSave={h=>{if(editHabit)setHabits(p=>p.map(x=>x.id===h.id?h:x));else setHabits(p=>[...p,{...h,id:Date.now()}]);setShowAdd(false);setEditHabit(null);}}
+        onArchive={editHabit?(id)=>{const h=habits.find(x=>x.id===id);setArchived(p=>[...p,h]);setHabits(p=>p.filter(x=>x.id!==id));setEditHabit(null);}:null}
+        onDelete={editHabit?(id)=>{setHabits(p=>p.filter(x=>x.id!==id));setEditHabit(null);}:null}
+        onClose={()=>{setShowAdd(false);setEditHabit(null);}}/>}
+
+      {showArchive&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&setShowArchive(false)}>
+          <div dir="rtl" style={{background:"white",borderRadius:"24px 24px 0 0",padding:24,width:"100%",maxWidth:480,maxHeight:"75vh",overflowY:"auto"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <span style={{fontWeight:700,fontSize:17,color:"#1f2937"}}>🗄️ ארכיון</span>
+              <button onClick={()=>setShowArchive(false)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9ca3af"}}>✕</button>
+            </div>
+            {archived.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:"#d1d5db",fontSize:14}}>אין הרגלים בארכיון</div>}
+            {archived.map(h=>(<div key={h.id} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 0",borderBottom:"1px solid #f3f4f6"}}>
+              <div style={{width:40,height:40,borderRadius:12,background:PASTEL[h.color],display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{h.icon}</div>
+              <div style={{flex:1,color:"#6b7280",fontSize:14}}>{h.name}</div>
+              <button onClick={()=>{setHabits(p=>[...p,h]);setArchived(p=>p.filter(x=>x.id!==h.id));}} style={{fontSize:12,padding:"5px 10px",borderRadius:10,background:"#ede9fe",color:"#7c3aed",border:"none",cursor:"pointer",fontWeight:600}}>שחזור</button>
+              <button onClick={()=>setArchived(p=>p.filter(x=>x.id!==h.id))} style={{fontSize:12,padding:"5px 10px",borderRadius:10,background:"#fef2f2",color:"#ef4444",border:"none",cursor:"pointer"}}>מחיקה</button>
+            </div>))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HabitModal({habit,onSave,onDelete,onArchive,onClose}){
+  const [name,setName]=useState(habit?.name||"");
+  const [icon,setIcon]=useState(habit?.icon||"🌸");
+  const [color,setColor]=useState(habit?.color||"purple");
+  const [freqCount,setFreqCount]=useState(habit?.freq?.count||1);
+  const [freqUnit,setFreqUnit]=useState(habit?.freq?.unit||"day");
+  const [hasSteps,setHasSteps]=useState(!!habit?.stepsGoal);
+  const [stepsGoal,setStepsGoal]=useState(habit?.stepsGoal||8000);
+  const [notes,setNotes]=useState(habit?.notes||"");
+  const [reminder,setReminder]=useState(habit?.reminder||"");
+  const save=()=>{if(!name.trim())return;onSave({id:habit?.id,name,icon,color,freq:{count:freqCount,unit:freqUnit},stepsGoal:hasSteps?stepsGoal:null,goals:[],notes,reminder});};
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div dir="rtl" style={{background:"white",borderRadius:"24px 24px 0 0",padding:24,width:"100%",maxWidth:480,maxHeight:"88vh",overflowY:"auto",boxShadow:"0 -8px 32px #0002"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <span style={{fontWeight:700,fontSize:17,color:"#1f2937"}}>{habit?"✏️ עריכת הרגל":"✨ הרגל חדש"}</span>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9ca3af"}}>✕</button>
+        </div>
+        <label style={{fontSize:13,color:"#6b7280",display:"block",marginBottom:4}}>שם ההרגל</label>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="למשל: ספורט" style={{width:"100%",padding:"10px 12px",borderRadius:12,border:"1.5px solid #e5e7eb",fontSize:14,marginBottom:16,boxSizing:"border-box"}}/>
+        <label style={{fontSize:13,color:"#6b7280",display:"block",marginBottom:8}}>תדירות</label>
+        <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:16}}>
+          <select value={freqCount} onChange={e=>setFreqCount(parseInt(e.target.value))} style={{padding:"8px 10px",borderRadius:10,border:"1.5px solid #e5e7eb",fontSize:14,background:"white",flex:1}}>
+            {Array.from({length:10},(_,i)=><option key={i+1} value={i+1}>{i+1}×</option>)}
+          </select>
+          <span style={{fontSize:14,color:"#6b7280"}}>ב</span>
+          <select value={freqUnit} onChange={e=>setFreqUnit(e.target.value)} style={{padding:"8px 10px",borderRadius:10,border:"1.5px solid #e5e7eb",fontSize:14,background:"white",flex:1}}>
+            <option value="day">יום</option>
+            <option value="week">שבוע</option>
+            <option value="month">חודש</option>
+          </select>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:hasSteps?12:16,padding:"10px 12px",borderRadius:12,background:"#f5f3ff",border:"1px solid #ede9fe"}}>
+          <span style={{fontSize:13,color:"#7c3aed",flex:1}}>👟 הוסיפי יעד צעדים יומי</span>
+          <button onClick={()=>setHasSteps(p=>!p)} style={{padding:"5px 12px",borderRadius:10,border:"none",background:hasSteps?"#7c3aed":"#e5e7eb",color:hasSteps?"white":"#6b7280",fontSize:12,cursor:"pointer",fontWeight:600}}>{hasSteps?"פעיל":"כבוי"}</button>
+        </div>
+        {hasSteps&&(
+          <div style={{marginBottom:16}}>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+              {[5000,7000,8000,10000,12000,15000].map(v=>(<button key={v} onClick={()=>setStepsGoal(v)} style={{padding:"5px 10px",borderRadius:10,border:`1.5px solid ${stepsGoal===v?"#7c3aed":"#e5e7eb"}`,background:stepsGoal===v?"#ede9fe":"white",color:stepsGoal===v?"#7c3aed":"#6b7280",fontSize:12,cursor:"pointer",fontWeight:stepsGoal===v?700:400}}>{v.toLocaleString()}</button>))}
+            </div>
+            <input type="number" value={stepsGoal} onChange={e=>setStepsGoal(parseInt(e.target.value)||8000)} placeholder="מספר צעדים..." style={{width:"100%",padding:"8px 12px",borderRadius:10,border:"1.5px solid #e5e7eb",fontSize:13,boxSizing:"border-box"}}/>
+          </div>
+        )}
+        <label style={{fontSize:13,color:"#6b7280",display:"block",marginBottom:8}}>אייקון</label>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:16}}>{ICONS.map(ic=>(<button key={ic} onClick={()=>setIcon(ic)} style={{width:36,height:36,borderRadius:10,border:`2px solid ${icon===ic?"#7c3aed":"#e5e7eb"}`,background:icon===ic?"#ede9fe":"white",fontSize:18,cursor:"pointer"}}>{ic}</button>))}</div>
+        <label style={{fontSize:13,color:"#6b7280",display:"block",marginBottom:8}}>צבע</label>
+        <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>{COLORS.map(c=>(<button key={c} onClick={()=>setColor(c)} style={{width:28,height:28,borderRadius:"50%",background:PASTEL[c],border:`2.5px solid ${color===c?PASTEL[c+"D"]:"transparent"}`,cursor:"pointer"}}/>))}</div>
+        <label style={{fontSize:13,color:"#6b7280",display:"block",marginBottom:4}}>תזכורת ⏰</label>
+        <input type="time" value={reminder} onChange={e=>setReminder(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:12,border:"1.5px solid #e5e7eb",fontSize:14,marginBottom:16,boxSizing:"border-box"}}/>
+        <label style={{fontSize:13,color:"#6b7280",display:"block",marginBottom:4}}>הערות 📝</label>
+        <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder="הערות..." rows={2} style={{width:"100%",padding:"10px 12px",borderRadius:12,border:"1.5px solid #e5e7eb",fontSize:14,marginBottom:16,boxSizing:"border-box",resize:"none"}}/>
+        <button onClick={save} style={{width:"100%",padding:14,background:"linear-gradient(135deg,#a78bfa,#ec4899)",color:"white",border:"none",borderRadius:14,fontSize:15,fontWeight:700,cursor:"pointer",marginBottom:8}}>{habit?"שמירת שינויים ✨":"הוספת הרגל 🌸"}</button>
+        {onArchive&&<button onClick={()=>onArchive(habit.id)} style={{width:"100%",padding:12,background:"#f0fdf4",color:"#10b981",border:"none",borderRadius:14,fontSize:14,cursor:"pointer",marginBottom:8}}>🗄️ העברה לארכיון</button>}
+        {onDelete&&<button onClick={()=>onDelete(habit.id)} style={{width:"100%",padding:12,background:"#fef2f2",color:"#ef4444",border:"none",borderRadius:14,fontSize:14,cursor:"pointer"}}>🗑️ מחיקת הרגל</button>}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
